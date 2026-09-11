@@ -5,5 +5,11 @@
   },
   "history": [],
   "recurring": [],
-  "scheduled": []
+  "scheduled": [
+    {
+      "id": "u3qx80xu",
+      "text": "Check CB submissions",
+      "date": "2026-09-14"
+    }
+  ]
 }
