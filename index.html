@@ -602,11 +602,37 @@
     }
   }
 
+  // Batch edits into far fewer commits: a save resets a 60s "quiet period"
+  // timer rather than writing immediately, so a burst of checkbox clicks or
+  // added tasks collapses into one commit. ghDirty covers two safety nets
+  // so nothing gets stuck unsaved: a 5-minute max wait during continuous
+  // activity, and an immediate flush when the tab is hidden or closed.
+  const GH_DEBOUNCE_MS = 60000;
+  const GH_MAX_INTERVAL_MS = 5 * 60 * 1000;
+  let ghDirty = false;
+
   function scheduleGhWrite() {
     if (!ghToken) return;
+    ghDirty = true;
     if (ghWriteTimer) clearTimeout(ghWriteTimer);
-    ghWriteTimer = setTimeout(ghWriteState, 3000);
+    ghWriteTimer = setTimeout(flushGhWrite, GH_DEBOUNCE_MS);
   }
+
+  async function flushGhWrite() {
+    if (ghWriteTimer) {
+      clearTimeout(ghWriteTimer);
+      ghWriteTimer = null;
+    }
+    if (!ghToken || !ghDirty) return;
+    ghDirty = false;
+    await ghWriteState();
+  }
+
+  setInterval(() => { if (ghDirty) flushGhWrite(); }, GH_MAX_INTERVAL_MS);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && ghDirty) flushGhWrite();
+  });
 
   async function initGhSync() {
     if (!ghToken) return;
