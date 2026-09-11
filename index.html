@@ -467,6 +467,19 @@
 
     <div class="section-title">Scheduled</div>
     <div id="scheduledWrap"></div>
+
+    <div class="section-title">Sync</div>
+    <div class="recurring-form">
+      <div class="field-row">
+        <label for="ghTokenInput">Token</label>
+        <input type="password" id="ghTokenInput" placeholder="GitHub fine-grained token">
+      </div>
+      <div class="field-row">
+        <button class="save-btn" id="ghConnectBtn">Connect</button>
+        <button class="save-btn" id="ghDisconnectBtn" style="background: var(--ink-soft);">Disconnect</button>
+      </div>
+      <div class="recurring-range" id="ghStatus"></div>
+    </div>
   </div>
 
   <div class="view" id="view-history">
@@ -529,16 +542,112 @@
   let recurring = readJSON(KEY_RECURRING, []);
   let scheduled = readJSON(KEY_SCHEDULED, []);
 
+  // GitHub-backed sync: the whole state lives in one JSON file in this repo
+  // (data/docket-data.json), read/written via the GitHub REST API. The
+  // token is entered in the Sync section below and lives only in this
+  // browser's localStorage — never committed, never sent anywhere but
+  // api.github.com. With no token, everything just uses localStorage.
+  const GH_OWNER = 'Angela-Jeyachandran';
+  const GH_REPO_NAME = 'daily-docket';
+  const GH_DATA_PATH = 'data/docket-data.json';
+  const KEY_GH_TOKEN = 'docket:gh-token';
+
+  let ghToken = localStorage.getItem(KEY_GH_TOKEN) || '';
+  let ghFileSha = null;
+  let ghWriteTimer = null;
+
+  function ghHeaders() {
+    return { Authorization: 'Bearer ' + ghToken, Accept: 'application/vnd.github+json' };
+  }
+
+  function b64EncodeUtf8(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  function b64DecodeUtf8(str) {
+    return decodeURIComponent(escape(atob(str.replace(/\n/g, ''))));
+  }
+
+  async function ghReadState() {
+    if (!ghToken) return null;
+    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO_NAME}/contents/${GH_DATA_PATH}`;
+    const res = await fetch(url, { headers: ghHeaders() });
+    if (res.status === 404) return { exists: false };
+    if (!res.ok) throw new Error('GitHub read failed: ' + res.status);
+    const json = await res.json();
+    ghFileSha = json.sha;
+    return { exists: true, data: JSON.parse(b64DecodeUtf8(json.content)) };
+  }
+
+  async function ghWriteState() {
+    if (!ghToken) return;
+    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO_NAME}/contents/${GH_DATA_PATH}`;
+    const body = {
+      message: 'Update docket data',
+      content: b64EncodeUtf8(JSON.stringify({ current, history, recurring, scheduled }, null, 2)),
+    };
+    if (ghFileSha) body.sha = ghFileSha;
+    try {
+      const res = await fetch(url, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+      if (res.ok) {
+        const json = await res.json();
+        ghFileSha = json.content.sha;
+      } else if (res.status === 409) {
+        // sha changed underneath us (another device wrote) — re-read and retry once
+        const fresh = await ghReadState();
+        if (fresh && fresh.exists) await ghWriteState();
+      }
+    } catch (e) {
+      // offline or blocked — localStorage already has the data
+    }
+  }
+
+  function scheduleGhWrite() {
+    if (!ghToken) return;
+    if (ghWriteTimer) clearTimeout(ghWriteTimer);
+    ghWriteTimer = setTimeout(ghWriteState, 3000);
+  }
+
+  async function initGhSync() {
+    if (!ghToken) return;
+    try {
+      const result = await ghReadState();
+      if (result && result.exists) {
+        current = result.data.current || current;
+        history = result.data.history || history;
+        recurring = result.data.recurring || recurring;
+        scheduled = result.data.scheduled || scheduled;
+        rolloverIfNeeded();
+        renderToday();
+      } else {
+        scheduleGhWrite();
+      }
+    } catch (e) {
+      // couldn't reach GitHub — local state stands, will retry on next save
+    }
+  }
+
+  function setGhToken(token) {
+    ghToken = token;
+    ghFileSha = null;
+    if (ghToken) {
+      localStorage.setItem(KEY_GH_TOKEN, ghToken);
+    } else {
+      localStorage.removeItem(KEY_GH_TOKEN);
+    }
+  }
+
   function rolloverIfNeeded() {
     const today = todayKey();
 
     if (!current) {
       current = { date: today, tasks: [] };
     } else if (current.date !== today) {
-      history.unshift({
+      const archivedDay = {
         date: current.date,
         tasks: current.tasks.map(t => ({ text: t.text, done: t.done }))
-      });
+      };
+      history.unshift(archivedDay);
       if (history.length > HISTORY_LIMIT) history = history.slice(0, HISTORY_LIMIT);
 
       const carried = current.tasks
@@ -585,6 +694,7 @@
     writeJSON(KEY_HISTORY, history);
     writeJSON(KEY_RECURRING, recurring);
     writeJSON(KEY_SCHEDULED, scheduled);
+    scheduleGhWrite();
   }
 
   function renderToday() {
@@ -908,8 +1018,33 @@
     schedDate.value = tomorrowKey();
   });
 
+  const ghTokenInput = document.getElementById('ghTokenInput');
+  const ghStatus = document.getElementById('ghStatus');
+
+  function refreshGhStatus() {
+    ghStatus.textContent = ghToken
+      ? `Connected — syncing to github.com/${GH_OWNER}/${GH_REPO_NAME}`
+      : 'Not connected — tasks are only saved in this browser.';
+  }
+  refreshGhStatus();
+
+  document.getElementById('ghConnectBtn').addEventListener('click', () => {
+    const token = ghTokenInput.value.trim();
+    if (!token) return;
+    setGhToken(token);
+    ghTokenInput.value = '';
+    refreshGhStatus();
+    initGhSync();
+  });
+
+  document.getElementById('ghDisconnectBtn').addEventListener('click', () => {
+    setGhToken('');
+    refreshGhStatus();
+  });
+
   rolloverIfNeeded();
   renderToday();
+  initGhSync();
 </script>
 
 </body>
