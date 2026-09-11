@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Docket</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F2F0EA;
+    --ink: #23211E;
+    --ink-soft: #5B584F;
+    --slate: #2F4858;
+    --ochre: #D98E2B;
+    --sage: #6B8F71;
+    --hairline: #D8D3C7;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 48px 20px 80px;
+  }
+
+  .docket {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  header {
+    margin-bottom: 24px;
+  }
+
+  .label {
+    font-size: 13px;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-optical-sizing: auto;
+    font-weight: 500;
+    font-size: 34px;
+    margin: 0 0 4px 0;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+
+  .subline {
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: 14px;
+  }
+
+  .progress-track {
+    height: 2px;
+    background: var(--hairline);
+    margin-top: 10px;
+    position: relative;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--ochre);
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 18px;
+    margin-top: 22px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .tab {
+    background: none;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    padding: 0 0 10px 0;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s ease;
+  }
+
+  .tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--ochre);
+  }
+
+  .tab:hover {
+    color: var(--ink);
+  }
+
+  .view {
+    display: none;
+  }
+
+  .view.active {
+    display: block;
+  }
+
+  .task-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .task:last-child {
+    border-bottom: none;
+  }
+
+  .check {
+    width: 17px;
+    height: 17px;
+    min-width: 17px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink-soft);
+    cursor: pointer;
+    background: transparent;
+    position: relative;
+    padding: 0;
+    transition: all 0.15s ease;
+  }
+
+  .check.done {
+    background: var(--sage);
+    border-color: var(--sage);
+  }
+
+  .check.done::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 4px;
+    height: 8px;
+    border-right: 1.5px solid var(--paper);
+    border-bottom: 1.5px solid var(--paper);
+    transform: rotate(40deg);
+  }
+
+  .check.static {
+    cursor: default;
+  }
+
+  .task-text {
+    flex: 1;
+    font-size: 15px;
+    color: var(--ink);
+    word-break: break-word;
+  }
+
+  .task-text.done {
+    color: var(--ink-soft);
+    text-decoration: line-through;
+    text-decoration-color: var(--hairline);
+  }
+
+  .repeat-icon {
+    color: var(--slate);
+    opacity: 0.55;
+    font-size: 13px;
+    margin-right: 2px;
+  }
+
+  .carry-badge {
+    font-size: 11px;
+    color: var(--ochre);
+    border: 1px solid var(--ochre);
+    border-radius: 20px;
+    padding: 1px 7px;
+    opacity: 0.85;
+    white-space: nowrap;
+  }
+
+  .del {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0;
+    padding: 2px 4px;
+    transition: opacity 0.15s ease;
+    line-height: 1;
+  }
+
+  .task:hover .del {
+    opacity: 0.55;
+  }
+
+  .del:hover {
+    opacity: 1 !important;
+    color: var(--ink);
+  }
+
+  .empty {
+    font-style: italic;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    padding: 16px 0;
+  }
+
+  .add-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 4px;
+  }
+
+  .add-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 14.5px;
+    padding: 6px 2px;
+    color: var(--ink);
+    outline: none;
+  }
+
+  .add-input::placeholder {
+    color: #A8A398;
+  }
+
+  .add-btn {
+    background: none;
+    border: none;
+    color: var(--slate);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    opacity: 0.75;
+    transition: opacity 0.15s ease;
+  }
+
+  .add-btn:hover {
+    opacity: 1;
+  }
+
+  /* Recurring view */
+  .section-title {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    font-weight: 500;
+    margin: 22px 0 10px;
+  }
+
+  .section-title:first-child {
+    margin-top: 4px;
+  }
+
+  .recurring-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--hairline);
+    margin-bottom: 6px;
+  }
+
+  .field-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .field-row label {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    min-width: 68px;
+  }
+
+  .field-row input[type="text"],
+  .field-row input[type="date"] {
+    flex: 1;
+    border: 1px solid var(--hairline);
+    background: var(--paper);
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    padding: 7px 9px;
+    color: var(--ink);
+    outline: none;
+  }
+
+  .field-row input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+  }
+
+  .checkbox-label {
+    font-size: 13px;
+    color: var(--ink-soft);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: unset;
+  }
+
+  .save-btn {
+    align-self: flex-start;
+    background: var(--slate);
+    color: var(--paper);
+    border: none;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    padding: 8px 16px;
+    cursor: pointer;
+    opacity: 0.9;
+    transition: opacity 0.15s ease;
+  }
+
+  .save-btn:hover {
+    opacity: 1;
+  }
+
+  .recurring-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .recurring-item:last-child {
+    border-bottom: none;
+  }
+
+  .recurring-info {
+    flex: 1;
+  }
+
+  .recurring-text {
+    font-size: 14.5px;
+    color: var(--ink);
+  }
+
+  .recurring-range {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  /* History view */
+  .history-day {
+    margin-bottom: 22px;
+  }
+
+  .history-date {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .history-summary {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+
+  footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 40px;
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+
+<div class="docket">
+  <header>
+    <div class="label">Today's docket</div>
+    <h1 id="dateHeading"></h1>
+    <div class="subline" id="progressText">0 of 0 done</div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+    <nav class="tabs">
+      <button class="tab active" data-view="today">Today</button>
+      <button class="tab" data-view="recurring">Recurring</button>
+      <button class="tab" data-view="history">History</button>
+    </nav>
+  </header>
+
+  <div class="view active" id="view-today">
+    <div id="listWrap"></div>
+
+    <div class="add-row">
+      <input class="add-input" id="addInput" placeholder="Add a task&hellip;">
+      <button class="add-btn" id="addBtn">+</button>
+    </div>
+  </div>
+
+  <div class="view" id="view-recurring">
+    <div class="section-title">Add a recurring task</div>
+    <div class="recurring-form">
+      <div class="field-row">
+        <label for="recText">Task</label>
+        <input type="text" id="recText" placeholder="e.g. Stretch">
+      </div>
+      <div class="field-row">
+        <label for="recStart">Starts</label>
+        <input type="date" id="recStart">
+      </div>
+      <div class="field-row">
+        <label for="recEnd">Ends</label>
+        <input type="date" id="recEnd">
+      </div>
+      <div class="field-row">
+        <span class="checkbox-label"><input type="checkbox" id="recNoEnd" checked> No end date</span>
+      </div>
+      <button class="save-btn" id="recSaveBtn">Add recurring task</button>
+    </div>
+
+    <div class="section-title">Active &amp; upcoming</div>
+    <div id="recurringWrap"></div>
+  </div>
+
+  <div class="view" id="view-history">
+    <div id="historyWrap"></div>
+  </div>
+
+  <footer>Today's list resets each day &mdash; unfinished tasks carry forward.</footer>
+</div>
+
+<script>
+  const KEY_CURRENT = 'docket:current';
+  const KEY_HISTORY = 'docket:history';
+  const KEY_RECURRING = 'docket:recurring';
+  const HISTORY_LIMIT = 120;
+
+  function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function uid() {
+    return Math.random().toString(36).slice(2, 10);
+  }
+
+  function readJSON(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function writeJSON(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const now = new Date();
+    const opts = d.getFullYear() === now.getFullYear()
+      ? { weekday: 'long', month: 'long', day: 'numeric' }
+      : { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+    return d.toLocaleDateString('en-US', opts);
+  }
+
+  function formatDateShort(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function isRecurringActive(rec, dateStr) {
+    if (dateStr < rec.start) return false;
+    if (rec.end && dateStr > rec.end) return false;
+    return true;
+  }
+
+  let current = readJSON(KEY_CURRENT, null);
+  let history = readJSON(KEY_HISTORY, []);
+  let recurring = readJSON(KEY_RECURRING, []);
+
+  function rolloverIfNeeded() {
+    const today = todayKey();
+
+    if (!current) {
+      current = { date: today, tasks: [] };
+    } else if (current.date !== today) {
+      history.unshift({
+        date: current.date,
+        tasks: current.tasks.map(t => ({ text: t.text, done: t.done }))
+      });
+      if (history.length > HISTORY_LIMIT) history = history.slice(0, HISTORY_LIMIT);
+
+      const carried = current.tasks
+        .filter(t => !t.done)
+        .map(t => ({
+          id: uid(),
+          text: t.text,
+          done: false,
+          carryDays: (t.carryDays || 0) + 1,
+          recurringId: t.recurringId || null
+        }));
+
+      current = { date: today, tasks: carried };
+    }
+
+    syncRecurringIntoToday();
+    persist();
+  }
+
+  function syncRecurringIntoToday() {
+    const today = current.date;
+    recurring.forEach(rec => {
+      if (!isRecurringActive(rec, today)) return;
+      const exists = current.tasks.some(t => t.recurringId === rec.id);
+      if (!exists) {
+        current.tasks.push({ id: uid(), text: rec.text, done: false, carryDays: 0, recurringId: rec.id });
+      }
+    });
+  }
+
+  function persist() {
+    writeJSON(KEY_CURRENT, current);
+    writeJSON(KEY_HISTORY, history);
+    writeJSON(KEY_RECURRING, recurring);
+  }
+
+  function renderToday() {
+    document.getElementById('dateHeading').textContent = formatDate(current.date);
+
+    const wrap = document.getElementById('listWrap');
+    wrap.innerHTML = '';
+
+    if (current.tasks.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Nothing on the docket yet';
+      wrap.appendChild(empty);
+    } else {
+      const list = document.createElement('ul');
+      list.className = 'task-list';
+      current.tasks.forEach(task => {
+        const li = document.createElement('li');
+        li.className = 'task';
+
+        const check = document.createElement('button');
+        check.className = 'check' + (task.done ? ' done' : '');
+        check.onclick = () => toggleTask(task.id);
+
+        const text = document.createElement('span');
+        text.className = 'task-text' + (task.done ? ' done' : '');
+        if (task.recurringId) {
+          const icon = document.createElement('span');
+          icon.className = 'repeat-icon';
+          icon.title = 'Recurring task';
+          icon.textContent = '↻';
+          text.appendChild(icon);
+        }
+        text.appendChild(document.createTextNode(task.text));
+
+        li.appendChild(check);
+        li.appendChild(text);
+
+        if (task.carryDays > 0) {
+          const badge = document.createElement('span');
+          badge.className = 'carry-badge';
+          badge.textContent = task.carryDays === 1 ? '1 day' : task.carryDays + ' days';
+          li.appendChild(badge);
+        }
+
+        const del = document.createElement('button');
+        del.className = 'del';
+        del.textContent = '✕';
+        del.onclick = () => deleteTask(task.id);
+        li.appendChild(del);
+
+        list.appendChild(li);
+      });
+      wrap.appendChild(list);
+    }
+
+    const done = current.tasks.filter(t => t.done).length;
+    const total = current.tasks.length;
+    document.getElementById('progressText').textContent = `${done} of ${total} done`;
+    document.getElementById('progressFill').style.width = total ? `${(done / total) * 100}%` : '0%';
+  }
+
+  function addTask(text) {
+    current.tasks.push({ id: uid(), text, done: false, carryDays: 0, recurringId: null });
+    persist();
+    renderToday();
+  }
+
+  function toggleTask(id) {
+    const task = current.tasks.find(t => t.id === id);
+    if (task) task.done = !task.done;
+    persist();
+    renderToday();
+  }
+
+  function deleteTask(id) {
+    current.tasks = current.tasks.filter(t => t.id !== id);
+    persist();
+    renderToday();
+  }
+
+  function renderRecurring() {
+    const wrap = document.getElementById('recurringWrap');
+    wrap.innerHTML = '';
+
+    if (recurring.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No recurring tasks set up';
+      wrap.appendChild(empty);
+      return;
+    }
+
+    recurring
+      .slice()
+      .sort((a, b) => a.start.localeCompare(b.start))
+      .forEach(rec => {
+        const row = document.createElement('div');
+        row.className = 'recurring-item';
+
+        const info = document.createElement('div');
+        info.className = 'recurring-info';
+
+        const text = document.createElement('div');
+        text.className = 'recurring-text';
+        text.textContent = rec.text;
+
+        const range = document.createElement('div');
+        range.className = 'recurring-range';
+        range.textContent = rec.end
+          ? `${formatDateShort(rec.start)} → ${formatDateShort(rec.end)}`
+          : `${formatDateShort(rec.start)} → ongoing`;
+
+        info.appendChild(text);
+        info.appendChild(range);
+
+        const del = document.createElement('button');
+        del.className = 'del';
+        del.style.opacity = '0.55';
+        del.textContent = '✕';
+        del.onclick = () => deleteRecurring(rec.id);
+
+        row.appendChild(info);
+        row.appendChild(del);
+        wrap.appendChild(row);
+      });
+  }
+
+  function addRecurring(text, start, end) {
+    recurring.push({ id: uid(), text, start, end: end || null });
+    syncRecurringIntoToday();
+    persist();
+    renderRecurring();
+    renderToday();
+  }
+
+  function deleteRecurring(id) {
+    recurring = recurring.filter(r => r.id !== id);
+    persist();
+    renderRecurring();
+  }
+
+  function renderHistory() {
+    const wrap = document.getElementById('historyWrap');
+    wrap.innerHTML = '';
+
+    if (history.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No past days yet';
+      wrap.appendChild(empty);
+      return;
+    }
+
+    history.forEach(day => {
+      const block = document.createElement('div');
+      block.className = 'history-day';
+
+      const heading = document.createElement('div');
+      heading.className = 'history-date';
+      heading.textContent = formatDate(day.date);
+      block.appendChild(heading);
+
+      const done = day.tasks.filter(t => t.done).length;
+      const summary = document.createElement('div');
+      summary.className = 'history-summary';
+      summary.textContent = `${done} of ${day.tasks.length} done`;
+      block.appendChild(summary);
+
+      if (day.tasks.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'Nothing logged';
+        block.appendChild(empty);
+      } else {
+        const list = document.createElement('ul');
+        list.className = 'task-list';
+        day.tasks.forEach(task => {
+          const li = document.createElement('li');
+          li.className = 'task';
+
+          const check = document.createElement('span');
+          check.className = 'check static' + (task.done ? ' done' : '');
+
+          const text = document.createElement('span');
+          text.className = 'task-text' + (task.done ? ' done' : '');
+          text.textContent = task.text;
+
+          li.appendChild(check);
+          li.appendChild(text);
+          list.appendChild(li);
+        });
+        block.appendChild(list);
+      }
+
+      wrap.appendChild(block);
+    });
+  }
+
+  function switchView(view) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
+    if (view === 'recurring') renderRecurring();
+    if (view === 'history') renderHistory();
+  }
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => switchView(tab.dataset.view));
+  });
+
+  const input = document.getElementById('addInput');
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && input.value.trim()) {
+      addTask(input.value.trim());
+      input.value = '';
+    }
+  });
+  document.getElementById('addBtn').addEventListener('click', () => {
+    if (input.value.trim()) {
+      addTask(input.value.trim());
+      input.value = '';
+    }
+  });
+
+  const recStart = document.getElementById('recStart');
+  const recEnd = document.getElementById('recEnd');
+  const recNoEnd = document.getElementById('recNoEnd');
+  recStart.value = todayKey();
+  recEnd.disabled = true;
+  recNoEnd.addEventListener('change', () => {
+    recEnd.disabled = recNoEnd.checked;
+    if (recNoEnd.checked) recEnd.value = '';
+  });
+
+  document.getElementById('recSaveBtn').addEventListener('click', () => {
+    const text = document.getElementById('recText').value.trim();
+    const start = recStart.value || todayKey();
+    const end = recNoEnd.checked ? '' : recEnd.value;
+    if (!text) return;
+    addRecurring(text, start, end);
+    document.getElementById('recText').value = '';
+    recStart.value = todayKey();
+    recNoEnd.checked = true;
+    recEnd.disabled = true;
+    recEnd.value = '';
+  });
+
+  rolloverIfNeeded();
+  renderToday();
+</script>
+
+</body>
+</html>
