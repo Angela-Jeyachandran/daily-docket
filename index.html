@@ -414,7 +414,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-view="today">Today</button>
-      <button class="tab" data-view="recurring">Recurring</button>
+      <button class="tab" data-view="recurring">Plan ahead</button>
       <button class="tab" data-view="history">History</button>
     </nav>
   </header>
@@ -451,19 +451,36 @@
 
     <div class="section-title">Active &amp; upcoming</div>
     <div id="recurringWrap"></div>
+
+    <div class="section-title">Add a task for a later date</div>
+    <div class="recurring-form">
+      <div class="field-row">
+        <label for="schedText">Task</label>
+        <input type="text" id="schedText" placeholder="e.g. Renew passport">
+      </div>
+      <div class="field-row">
+        <label for="schedDate">Date</label>
+        <input type="date" id="schedDate">
+      </div>
+      <button class="save-btn" id="schedSaveBtn">Add scheduled task</button>
+    </div>
+
+    <div class="section-title">Scheduled</div>
+    <div id="scheduledWrap"></div>
   </div>
 
   <div class="view" id="view-history">
     <div id="historyWrap"></div>
   </div>
 
-  <footer>Today's list resets each day &mdash; unfinished tasks carry forward.</footer>
+  <footer>Today's list resets each day &mdash; unfinished tasks carry forward. Plan ahead for recurring or future tasks.</footer>
 </div>
 
 <script>
   const KEY_CURRENT = 'docket:current';
   const KEY_HISTORY = 'docket:history';
   const KEY_RECURRING = 'docket:recurring';
+  const KEY_SCHEDULED = 'docket:scheduled';
   const HISTORY_LIMIT = 120;
 
   function todayKey() {
@@ -510,6 +527,7 @@
   let current = readJSON(KEY_CURRENT, null);
   let history = readJSON(KEY_HISTORY, []);
   let recurring = readJSON(KEY_RECURRING, []);
+  let scheduled = readJSON(KEY_SCHEDULED, []);
 
   function rolloverIfNeeded() {
     const today = todayKey();
@@ -537,6 +555,7 @@
     }
 
     syncRecurringIntoToday();
+    syncScheduledIntoToday();
     persist();
   }
 
@@ -551,10 +570,21 @@
     });
   }
 
+  function syncScheduledIntoToday() {
+    const today = current.date;
+    const due = scheduled.filter(s => s.date <= today);
+    if (due.length === 0) return;
+    due.forEach(s => {
+      current.tasks.push({ id: uid(), text: s.text, done: false, carryDays: 0, recurringId: null });
+    });
+    scheduled = scheduled.filter(s => s.date > today);
+  }
+
   function persist() {
     writeJSON(KEY_CURRENT, current);
     writeJSON(KEY_HISTORY, history);
     writeJSON(KEY_RECURRING, recurring);
+    writeJSON(KEY_SCHEDULED, scheduled);
   }
 
   function renderToday() {
@@ -697,6 +727,65 @@
     renderRecurring();
   }
 
+  function renderScheduled() {
+    const wrap = document.getElementById('scheduledWrap');
+    wrap.innerHTML = '';
+
+    if (scheduled.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Nothing scheduled';
+      wrap.appendChild(empty);
+      return;
+    }
+
+    scheduled
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'recurring-item';
+
+        const info = document.createElement('div');
+        info.className = 'recurring-info';
+
+        const text = document.createElement('div');
+        text.className = 'recurring-text';
+        text.textContent = item.text;
+
+        const date = document.createElement('div');
+        date.className = 'recurring-range';
+        date.textContent = formatDateShort(item.date);
+
+        info.appendChild(text);
+        info.appendChild(date);
+
+        const del = document.createElement('button');
+        del.className = 'del';
+        del.style.opacity = '0.55';
+        del.textContent = '✕';
+        del.onclick = () => deleteScheduled(item.id);
+
+        row.appendChild(info);
+        row.appendChild(del);
+        wrap.appendChild(row);
+      });
+  }
+
+  function addScheduled(text, date) {
+    scheduled.push({ id: uid(), text, date });
+    syncScheduledIntoToday();
+    persist();
+    renderScheduled();
+    renderToday();
+  }
+
+  function deleteScheduled(id) {
+    scheduled = scheduled.filter(s => s.id !== id);
+    persist();
+    renderScheduled();
+  }
+
   function renderHistory() {
     const wrap = document.getElementById('historyWrap');
     wrap.innerHTML = '';
@@ -757,7 +846,7 @@
   function switchView(view) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
-    if (view === 'recurring') renderRecurring();
+    if (view === 'recurring') { renderRecurring(); renderScheduled(); }
     if (view === 'history') renderHistory();
   }
 
@@ -800,6 +889,23 @@
     recNoEnd.checked = true;
     recEnd.disabled = true;
     recEnd.value = '';
+  });
+
+  const schedDate = document.getElementById('schedDate');
+  function tomorrowKey() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  schedDate.value = tomorrowKey();
+
+  document.getElementById('schedSaveBtn').addEventListener('click', () => {
+    const text = document.getElementById('schedText').value.trim();
+    const date = schedDate.value;
+    if (!text || !date) return;
+    addScheduled(text, date);
+    document.getElementById('schedText').value = '';
+    schedDate.value = tomorrowKey();
   });
 
   rolloverIfNeeded();
