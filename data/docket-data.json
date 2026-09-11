@@ -14,7 +14,7 @@
         "id": "jt76ppka",
         "text": "Meet w/ Jordan",
         "note": "CB follow up, remote days, schedule next meeting",
-        "done": false,
+        "done": true,
         "carryDays": 0,
         "recurringId": null
       },
