@@ -173,17 +173,84 @@
     cursor: default;
   }
 
-  .task-text {
+  .drag-handle {
+    color: var(--ink-soft);
+    opacity: 0;
+    font-size: 13px;
+    width: 12px;
+    text-align: center;
+    cursor: grab;
+    user-select: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .task:hover .drag-handle {
+    opacity: 0.4;
+  }
+
+  .task.dragging {
+    opacity: 0.4;
+  }
+
+  .task-textwrap {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .task-text {
     font-size: 15px;
     color: var(--ink);
     word-break: break-word;
+    cursor: text;
   }
 
   .task-text.done {
     color: var(--ink-soft);
     text-decoration: line-through;
     text-decoration-color: var(--hairline);
+  }
+
+  .task-note {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    word-break: break-word;
+    cursor: text;
+  }
+
+  .task-note.done {
+    text-decoration: line-through;
+    text-decoration-color: var(--hairline);
+  }
+
+  .task-note.empty-note {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .task:hover .task-note.empty-note {
+    opacity: 0.5;
+  }
+
+  .task-edit-input {
+    width: 100%;
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    background: var(--paper);
+    font-family: 'Inter', sans-serif;
+    padding: 4px 6px;
+    outline: none;
+    color: var(--ink);
+  }
+
+  .task-edit-input.title {
+    font-size: 15px;
+  }
+
+  .task-edit-input.note {
+    font-size: 12.5px;
   }
 
   .repeat-icon {
@@ -675,7 +742,7 @@
     } else if (current.date !== today) {
       const archivedDay = {
         date: current.date,
-        tasks: current.tasks.map(t => ({ text: t.text, done: t.done }))
+        tasks: current.tasks.map(t => ({ text: t.text, done: t.done, note: t.note || '' }))
       };
       history.unshift(archivedDay);
       if (history.length > HISTORY_LIMIT) history = history.slice(0, HISTORY_LIMIT);
@@ -685,6 +752,7 @@
         .map(t => ({
           id: uid(),
           text: t.text,
+          note: t.note || '',
           done: false,
           carryDays: (t.carryDays || 0) + 1,
           recurringId: t.recurringId || null
@@ -704,7 +772,7 @@
       if (!isRecurringActive(rec, today)) return;
       const exists = current.tasks.some(t => t.recurringId === rec.id);
       if (!exists) {
-        current.tasks.push({ id: uid(), text: rec.text, done: false, carryDays: 0, recurringId: rec.id });
+        current.tasks.push({ id: uid(), text: rec.text, note: '', done: false, carryDays: 0, recurringId: rec.id });
       }
     });
   }
@@ -714,7 +782,7 @@
     const due = scheduled.filter(s => s.date <= today);
     if (due.length === 0) return;
     due.forEach(s => {
-      current.tasks.push({ id: uid(), text: s.text, done: false, carryDays: 0, recurringId: null });
+      current.tasks.push({ id: uid(), text: s.text, note: '', done: false, carryDays: 0, recurringId: null });
     });
     scheduled = scheduled.filter(s => s.date > today);
   }
@@ -744,13 +812,34 @@
       current.tasks.forEach(task => {
         const li = document.createElement('li');
         li.className = 'task';
+        li.draggable = true;
+
+        li.addEventListener('dragstart', () => {
+          dragSrcId = task.id;
+          li.classList.add('dragging');
+        });
+        li.addEventListener('dragend', () => li.classList.remove('dragging'));
+        li.addEventListener('dragover', (e) => e.preventDefault());
+        li.addEventListener('drop', (e) => {
+          e.preventDefault();
+          if (dragSrcId && dragSrcId !== task.id) reorderTasks(dragSrcId, task.id);
+          dragSrcId = null;
+        });
+
+        const handle = document.createElement('span');
+        handle.className = 'drag-handle';
+        handle.textContent = '⠿';
 
         const check = document.createElement('button');
         check.className = 'check' + (task.done ? ' done' : '');
         check.onclick = () => toggleTask(task.id);
 
+        const textWrap = document.createElement('div');
+        textWrap.className = 'task-textwrap';
+
         const text = document.createElement('span');
         text.className = 'task-text' + (task.done ? ' done' : '');
+        text.title = 'Click to edit';
         if (task.recurringId) {
           const icon = document.createElement('span');
           icon.className = 'repeat-icon';
@@ -759,9 +848,20 @@
           text.appendChild(icon);
         }
         text.appendChild(document.createTextNode(task.text));
+        text.onclick = () => startEditTitle(task.id, textWrap);
+        textWrap.appendChild(text);
 
+        const note = document.createElement('div');
+        const hasNote = !!task.note;
+        note.className = 'task-note' + (task.done ? ' done' : '') + (hasNote ? '' : ' empty-note');
+        note.textContent = hasNote ? task.note : '+ add a note';
+        note.title = hasNote ? 'Click to edit note' : 'Click to add a note';
+        note.onclick = () => startEditNote(task.id, textWrap);
+        textWrap.appendChild(note);
+
+        li.appendChild(handle);
         li.appendChild(check);
-        li.appendChild(text);
+        li.appendChild(textWrap);
 
         if (task.carryDays > 0) {
           const badge = document.createElement('span');
@@ -788,9 +888,75 @@
   }
 
   function addTask(text) {
-    current.tasks.push({ id: uid(), text, done: false, carryDays: 0, recurringId: null });
+    current.tasks.push({ id: uid(), text, note: '', done: false, carryDays: 0, recurringId: null });
     persist();
     renderToday();
+  }
+
+  let dragSrcId = null;
+
+  function reorderTasks(srcId, targetId) {
+    const srcIndex = current.tasks.findIndex(t => t.id === srcId);
+    if (srcIndex === -1) return;
+    const [item] = current.tasks.splice(srcIndex, 1);
+    const targetIndex = current.tasks.findIndex(t => t.id === targetId);
+    current.tasks.splice(targetIndex === -1 ? current.tasks.length : targetIndex, 0, item);
+    persist();
+    renderToday();
+  }
+
+  function startEditTitle(id, textWrap) {
+    const task = current.tasks.find(t => t.id === id);
+    if (!task) return;
+    const textEl = textWrap.querySelector('.task-text');
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'task-edit-input title';
+    input.value = task.text;
+    textWrap.replaceChild(input, textEl);
+    input.focus();
+    input.select();
+
+    let cancelled = false;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      else if (e.key === 'Escape') { cancelled = true; renderToday(); }
+    });
+    input.addEventListener('blur', () => {
+      if (cancelled) return;
+      const val = input.value.trim();
+      if (val) task.text = val;
+      persist();
+      renderToday();
+    });
+  }
+
+  function startEditNote(id, textWrap) {
+    const task = current.tasks.find(t => t.id === id);
+    if (!task) return;
+    const noteEl = textWrap.querySelector('.task-note');
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'task-edit-input note';
+    input.placeholder = 'Add a note (optional)';
+    input.value = task.note || '';
+    textWrap.replaceChild(input, noteEl);
+    input.focus();
+    input.select();
+
+    let cancelled = false;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      else if (e.key === 'Escape') { cancelled = true; renderToday(); }
+    });
+    input.addEventListener('blur', () => {
+      if (cancelled) return;
+      task.note = input.value.trim();
+      persist();
+      renderToday();
+    });
   }
 
   function toggleTask(id) {
@@ -968,12 +1134,23 @@
           const check = document.createElement('span');
           check.className = 'check static' + (task.done ? ' done' : '');
 
+          const textWrap = document.createElement('div');
+          textWrap.className = 'task-textwrap';
+
           const text = document.createElement('span');
           text.className = 'task-text' + (task.done ? ' done' : '');
           text.textContent = task.text;
+          textWrap.appendChild(text);
+
+          if (task.note) {
+            const note = document.createElement('div');
+            note.className = 'task-note' + (task.done ? ' done' : '');
+            note.textContent = task.note;
+            textWrap.appendChild(note);
+          }
 
           li.appendChild(check);
-          li.appendChild(text);
+          li.appendChild(textWrap);
           list.appendChild(li);
         });
         block.appendChild(list);
