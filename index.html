@@ -270,6 +270,16 @@
     white-space: nowrap;
   }
 
+  .streak-badge {
+    font-size: 11px;
+    color: var(--sage);
+    border: 1px solid var(--sage);
+    border-radius: 20px;
+    padding: 1px 7px;
+    opacity: 0.85;
+    white-space: nowrap;
+  }
+
   .del {
     background: none;
     border: none;
@@ -319,6 +329,23 @@
   }
 
   .add-input::placeholder {
+    color: #A8A398;
+  }
+
+  .search-input {
+    width: 100%;
+    border: 1px solid var(--hairline);
+    background: var(--paper);
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 16px;
+  }
+
+  .search-input::placeholder {
     color: #A8A398;
   }
 
@@ -444,6 +471,11 @@
     margin-top: 2px;
   }
 
+  .recurring-range.due-soon {
+    color: var(--ochre);
+    font-weight: 500;
+  }
+
   /* History view */
   .history-day {
     margin-bottom: 22px;
@@ -539,6 +571,7 @@
   </div>
 
   <div class="view" id="view-history">
+    <input class="search-input" id="historySearch" placeholder="Search history&hellip;">
     <div id="historyWrap"></div>
   </div>
 
@@ -972,6 +1005,22 @@
     renderToday();
   }
 
+  function computeStreak(rec) {
+    const days = [
+      { date: current.date, tasks: current.tasks.map(t => ({ text: t.text, done: t.done })) },
+      ...history,
+    ];
+    let streak = 0;
+    for (const day of days) {
+      if (day.date < rec.start) break;
+      if (rec.end && day.date > rec.end) continue;
+      const match = day.tasks.find(t => t.text === rec.text);
+      if (match && match.done) streak++;
+      else break;
+    }
+    return streak;
+  }
+
   function renderRecurring() {
     const wrap = document.getElementById('recurringWrap');
     wrap.innerHTML = '';
@@ -1007,13 +1056,22 @@
         info.appendChild(text);
         info.appendChild(range);
 
+        row.appendChild(info);
+
+        const streak = computeStreak(rec);
+        if (streak > 0) {
+          const badge = document.createElement('span');
+          badge.className = 'streak-badge';
+          badge.textContent = streak === 1 ? '1 day streak' : streak + ' day streak';
+          row.appendChild(badge);
+        }
+
         const del = document.createElement('button');
         del.className = 'del';
         del.style.opacity = '0.55';
         del.textContent = '✕';
         del.onclick = () => deleteRecurring(rec.id);
 
-        row.appendChild(info);
         row.appendChild(del);
         wrap.appendChild(row);
       });
@@ -1059,9 +1117,14 @@
         text.className = 'recurring-text';
         text.textContent = item.text;
 
+        const daysUntil = Math.round(
+          (new Date(item.date + 'T00:00:00') - new Date(current.date + 'T00:00:00')) / 86400000
+        );
+        const dueSoon = daysUntil <= 3;
+
         const date = document.createElement('div');
-        date.className = 'recurring-range';
-        date.textContent = formatDateShort(item.date);
+        date.className = 'recurring-range' + (dueSoon ? ' due-soon' : '');
+        date.textContent = (dueSoon ? 'Due soon · ' : '') + formatDateShort(item.date);
 
         info.appendChild(text);
         info.appendChild(date);
@@ -1096,15 +1159,22 @@
     const wrap = document.getElementById('historyWrap');
     wrap.innerHTML = '';
 
-    if (history.length === 0) {
+    const query = (document.getElementById('historySearch').value || '').trim().toLowerCase();
+    const days = query
+      ? history.filter(day => day.tasks.some(t =>
+          t.text.toLowerCase().includes(query) || (t.note || '').toLowerCase().includes(query)
+        ))
+      : history;
+
+    if (days.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = 'No past days yet';
+      empty.textContent = query ? 'No matching tasks' : 'No past days yet';
       wrap.appendChild(empty);
       return;
     }
 
-    history.forEach(day => {
+    days.forEach(day => {
       const block = document.createElement('div');
       block.className = 'history-day';
 
@@ -1248,6 +1318,8 @@
     setGhToken('');
     refreshGhStatus();
   });
+
+  document.getElementById('historySearch').addEventListener('input', renderHistory);
 
   rolloverIfNeeded();
   renderToday();
