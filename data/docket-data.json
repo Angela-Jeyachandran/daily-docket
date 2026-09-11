@@ -1,7 +1,32 @@
 {
   "current": {
     "date": "2026-09-11",
-    "tasks": []
+    "tasks": [
+      {
+        "id": "01fbn1p5",
+        "text": "Organize yesterday's meeting notes",
+        "note": "Brand Voice/enNews",
+        "done": false,
+        "carryDays": 0,
+        "recurringId": null
+      },
+      {
+        "id": "jt76ppka",
+        "text": "Meet w/ Jordan",
+        "note": "CB follow up, remote days, schedule next meeting",
+        "done": false,
+        "carryDays": 0,
+        "recurringId": null
+      },
+      {
+        "id": "99vst80a",
+        "text": "Plan itinerary for next meeting",
+        "note": "",
+        "done": false,
+        "carryDays": 0,
+        "recurringId": null
+      }
+    ]
   },
   "history": [],
   "recurring": [],
