@@ -686,6 +686,40 @@
     margin-top: 40px;
     opacity: 0.7;
   }
+
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(35, 33, 30, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+
+  .confirm-box {
+    background: var(--paper);
+    border-radius: 10px;
+    padding: 20px 22px;
+    max-width: 320px;
+    width: 100%;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .confirm-message {
+    font-size: 14.5px;
+    color: var(--ink);
+    line-height: 1.4;
+    margin-bottom: 18px;
+    word-break: break-word;
+  }
+
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
 </style>
 </head>
 <body>
@@ -812,6 +846,16 @@
   </div>
 
   <footer>Today's list resets each day &mdash; unfinished tasks carry forward. Plan ahead for recurring or future tasks.</footer>
+</div>
+
+<div class="confirm-overlay" id="confirmOverlay" style="display: none;">
+  <div class="confirm-box">
+    <div class="confirm-message" id="confirmMessage"></div>
+    <div class="confirm-actions">
+      <button class="save-btn" id="confirmCancelBtn" style="background: var(--ink-soft);">Cancel</button>
+      <button class="save-btn" id="confirmOkBtn" style="background: var(--priority-high);">Delete</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1434,10 +1478,37 @@
     renderToday();
   }
 
-  function deleteTask(id) {
+  function showConfirm(message) {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('confirmOverlay');
+      const msgEl = document.getElementById('confirmMessage');
+      const okBtn = document.getElementById('confirmOkBtn');
+      const cancelBtn = document.getElementById('confirmCancelBtn');
+      msgEl.textContent = message;
+      overlay.style.display = 'flex';
+
+      function cleanup(result) {
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onOverlayClick);
+        resolve(result);
+      }
+      function onOk() { cleanup(true); }
+      function onCancel() { cleanup(false); }
+      function onOverlayClick(e) { if (e.target === overlay) cleanup(false); }
+
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onOverlayClick);
+    });
+  }
+
+  async function deleteTask(id) {
     const task = current.tasks.find(t => t.id === id);
     if (!task) return;
-    if (!confirm(`Delete "${task.text}"?`)) return;
+    const ok = await showConfirm(`Delete "${task.text}"?`);
+    if (!ok) return;
 
     current.tasks = current.tasks.filter(t => t.id !== id);
     persist();
