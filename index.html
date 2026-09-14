@@ -1435,9 +1435,17 @@
   }
 
   function deleteTask(id) {
+    const task = current.tasks.find(t => t.id === id);
+    if (!task) return;
+    if (!confirm(`Delete "${task.text}"?`)) return;
+
     current.tasks = current.tasks.filter(t => t.id !== id);
     persist();
     renderToday();
+
+    if (notionWorkerUrl && task.notionPageId) {
+      patchNotionTask(task.notionPageId, { archived: true });
+    }
   }
 
   function computeStreak(rec) {
