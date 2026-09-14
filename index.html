@@ -1241,7 +1241,7 @@
         await patchNotionTask(task.notionPageId, {
           priority: task.priority,
           project: task.project,
-          assignedDate: task.dueDate || current.date,
+          assignedDate: task.dueDate,
         });
       } else {
         try {
