@@ -43,5 +43,11 @@
     }
   ],
   "recurring": [],
-  "scheduled": []
+  "scheduled": [
+    {
+      "id": "o586ghr0",
+      "text": "Request PTO",
+      "date": "2026-09-21"
+    }
+  ]
 }
