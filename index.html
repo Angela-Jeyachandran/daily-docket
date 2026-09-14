@@ -1543,12 +1543,14 @@
         meta.appendChild(badge);
       }
 
-      const dateEl = document.createElement('span');
-      dateEl.className = 'backlog-date';
-      dateEl.textContent = item.assignedDate ? formatDateShort(item.assignedDate) : 'No date';
-      dateEl.title = 'Click to change date';
-      dateEl.onclick = () => startEditBacklogDate(item, meta, dateEl);
-      meta.appendChild(dateEl);
+      if (item.assignedDate) {
+        const dateEl = document.createElement('span');
+        dateEl.className = 'backlog-date';
+        dateEl.textContent = formatDateShort(item.assignedDate);
+        dateEl.title = 'Click to change date';
+        dateEl.onclick = () => startEditBacklogDate(item, meta, dateEl);
+        meta.appendChild(dateEl);
+      }
 
       info.appendChild(meta);
       row.appendChild(info);
