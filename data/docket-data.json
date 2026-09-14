@@ -17,6 +17,14 @@
         "done": false,
         "carryDays": 0,
         "recurringId": null
+      },
+      {
+        "id": "5u420h7i",
+        "text": "Create a Prompt for Regan to Run in Claude",
+        "note": "For the CB follow up process",
+        "done": false,
+        "carryDays": 0,
+        "recurringId": null
       }
     ]
   },
