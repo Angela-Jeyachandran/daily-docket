@@ -20,6 +20,9 @@
     --ochre: #D98E2B;
     --sage: #6B8F71;
     --hairline: #D8D3C7;
+    --priority-high: #B5533C;
+    --priority-medium: #D98E2B;
+    --priority-low: #6B8F71;
   }
 
   * { box-sizing: border-box; }
@@ -361,6 +364,18 @@
     transition: opacity 0.15s ease;
   }
 
+  .add-select {
+    border: 1px solid var(--hairline);
+    background: var(--paper);
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    padding: 4px 6px;
+    outline: none;
+    max-width: 92px;
+  }
+
   .add-btn:hover {
     opacity: 1;
   }
@@ -609,6 +624,11 @@
 
     <div class="add-row">
       <input class="add-input" id="addInput" placeholder="Add a task&hellip;">
+      <select class="add-select" id="addPrioritySelect" style="display: none;">
+        <option value="">Priority</option>
+      </select>
+      <input class="add-select" id="addProjectSelect" list="addProjectOptions" placeholder="Project" style="display: none;" autocomplete="off">
+      <datalist id="addProjectOptions"></datalist>
       <button class="add-btn" id="addBtn">+</button>
     </div>
 
@@ -1043,7 +1063,34 @@
     document.getElementById('progressFill').style.width = total ? `${(done / total) * 100}%` : '0%';
   }
 
-  function addTask(text) {
+  async function addTask(text, priority, project) {
+    if (notionWorkerUrl && (priority || project)) {
+      try {
+        const res = await fetch(notionApiUrl('/tasks'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            priority: priority || undefined,
+            project: project || undefined,
+            status: 'In progress',
+            assignedDate: current.date,
+          }),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          current.tasks.push({
+            id: uid(), text, note: '', done: false, carryDays: 0, recurringId: null,
+            notionPageId: created.id,
+          });
+          persist();
+          renderToday();
+          return;
+        }
+      } catch (e) {
+        // offline or worker unreachable — fall back to a local-only task
+      }
+    }
     current.tasks.push({ id: uid(), text, note: '', done: false, carryDays: 0, recurringId: null });
     persist();
     renderToday();
@@ -1371,18 +1418,21 @@
   });
 
   const input = document.getElementById('addInput');
+  const addPrioritySelect = document.getElementById('addPrioritySelect');
+  const addProjectSelect = document.getElementById('addProjectSelect');
+
+  function submitAddTask() {
+    if (!input.value.trim()) return;
+    addTask(input.value.trim(), addPrioritySelect.value, addProjectSelect.value);
+    input.value = '';
+    addPrioritySelect.value = '';
+    addProjectSelect.value = '';
+  }
+
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && input.value.trim()) {
-      addTask(input.value.trim());
-      input.value = '';
-    }
+    if (e.key === 'Enter') submitAddTask();
   });
-  document.getElementById('addBtn').addEventListener('click', () => {
-    if (input.value.trim()) {
-      addTask(input.value.trim());
-      input.value = '';
-    }
-  });
+  document.getElementById('addBtn').addEventListener('click', submitAddTask);
 
   const recStart = document.getElementById('recStart');
   const recEnd = document.getElementById('recEnd');
@@ -1488,6 +1538,20 @@
     }
   }
 
+  const PRIORITY_COLORS = {
+    High: 'var(--priority-high)',
+    Medium: 'var(--priority-medium)',
+    Low: 'var(--priority-low)',
+  };
+
+  const PROJECT_PALETTE = ['#2F4858', '#6B8F71', '#8B5E83', '#3E7C87', '#A6763F', '#B5533C'];
+
+  function colorForProject(name) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+    return PROJECT_PALETTE[hash % PROJECT_PALETTE.length];
+  }
+
   function renderBacklog() {
     const section = document.getElementById('notionBacklogSection');
     const wrap = document.getElementById('notionBacklogWrap');
@@ -1534,12 +1598,17 @@
         const badge = document.createElement('span');
         badge.className = 'backlog-badge';
         badge.textContent = item.priority;
+        const color = PRIORITY_COLORS[item.priority];
+        if (color) { badge.style.borderColor = color; badge.style.color = color; }
         meta.appendChild(badge);
       }
       if (item.project) {
         const badge = document.createElement('span');
         badge.className = 'backlog-badge';
         badge.textContent = item.project;
+        const color = colorForProject(item.project);
+        badge.style.borderColor = color;
+        badge.style.color = color;
         meta.appendChild(badge);
       }
 
@@ -1634,10 +1703,50 @@
   }
   refreshNotionStatus();
 
+  function populateSelectOptions(select, values) {
+    while (select.options.length > 1) select.remove(1);
+    values.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      select.appendChild(opt);
+    });
+  }
+
+  function populateDatalistOptions(datalist, values) {
+    datalist.innerHTML = '';
+    values.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      datalist.appendChild(opt);
+    });
+  }
+
+  async function fetchNotionMeta() {
+    if (!notionWorkerUrl) return;
+    try {
+      const res = await fetch(notionApiUrl('/meta'));
+      if (!res.ok) return;
+      const meta = await res.json();
+      populateSelectOptions(addPrioritySelect, meta.priorities || []);
+      populateDatalistOptions(document.getElementById('addProjectOptions'), meta.projects || []);
+    } catch (e) {
+      // offline or worker unreachable — selects stay empty
+    }
+  }
+
+  function refreshAddTaskControls() {
+    const show = !!notionWorkerUrl;
+    addPrioritySelect.style.display = show ? '' : 'none';
+    addProjectSelect.style.display = show ? '' : 'none';
+  }
+
   async function initNotionSync() {
     refreshNotionStatus();
+    refreshAddTaskControls();
     if (notionWorkerUrl) {
       await fetchNotionBacklog();
+      await fetchNotionMeta();
     } else {
       renderBacklog();
     }
@@ -1655,6 +1764,7 @@
     setNotionWorkerUrl('');
     notionBacklog = [];
     refreshNotionStatus();
+    refreshAddTaskControls();
     renderBacklog();
   });
 
