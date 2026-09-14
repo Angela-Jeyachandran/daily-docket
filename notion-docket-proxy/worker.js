@@ -47,6 +47,7 @@ function pageToTask(page) {
     priority: (props.Priority && props.Priority.select && props.Priority.select.name) || null,
     project: (props.Project && props.Project.select && props.Project.select.name) || null,
     assignedDate: (props['Assigned Date'] && props['Assigned Date'].date && props['Assigned Date'].date.start) || null,
+    description: plainText(props.Description && props.Description.rich_text),
   };
 }
 
@@ -113,6 +114,7 @@ async function handleCreateTask(body, env) {
   if (body.project) properties['Project'] = { select: { name: body.project } };
   if (body.status) properties['Status'] = { status: { name: body.status } };
   if (body.assignedDate) properties['Assigned Date'] = { date: { start: body.assignedDate } };
+  if (body.description) properties['Description'] = { rich_text: [{ text: { content: body.description } }] };
 
   const res = await fetch(`${NOTION_API}/pages`, {
     method: 'POST',
@@ -151,6 +153,11 @@ async function handlePatchTask(pageId, body, env) {
   }
   if (body.project !== undefined) {
     properties['Project'] = body.project ? { select: { name: body.project } } : { select: null };
+  }
+  if (body.description !== undefined) {
+    properties['Description'] = body.description
+      ? { rich_text: [{ text: { content: body.description } }] }
+      : { rich_text: [] };
   }
 
   const pageUpdate = { properties };
