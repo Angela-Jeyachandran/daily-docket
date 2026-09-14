@@ -146,6 +146,12 @@ async function handlePatchTask(pageId, body, env) {
   if (body.status !== undefined) {
     properties['Status'] = { status: { name: body.status } };
   }
+  if (body.priority !== undefined) {
+    properties['Priority'] = body.priority ? { select: { name: body.priority } } : { select: null };
+  }
+  if (body.project !== undefined) {
+    properties['Project'] = body.project ? { select: { name: body.project } } : { select: null };
+  }
 
   const pageUpdate = { properties };
   if (body.archived !== undefined) pageUpdate.archived = !!body.archived;

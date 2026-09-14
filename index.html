@@ -237,6 +237,43 @@
     opacity: 0.5;
   }
 
+  .task-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .task-tags-add {
+    font-size: 11px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .task:hover .task-tags-add {
+    opacity: 0.5;
+  }
+
+  .task-tags-edit {
+    font-size: 10px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .task:hover .task-tags-edit {
+    opacity: 0.6;
+  }
+
+  .task-tags-edit-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
   .task-edit-input {
     width: 100%;
     border: 1px solid var(--hairline);
@@ -938,7 +975,9 @@
           done: false,
           carryDays: (t.carryDays || 0) + 1,
           recurringId: t.recurringId || null,
-          notionPageId: t.notionPageId || null
+          notionPageId: t.notionPageId || null,
+          priority: t.priority || null,
+          project: t.project || null
         }));
 
       current = { date: today, tasks: carried };
@@ -1062,6 +1101,42 @@
         note.onclick = () => startEditNote(task.id, textWrap);
         textWrap.appendChild(note);
 
+        if (notionWorkerUrl) {
+          const tags = document.createElement('div');
+          tags.className = 'task-tags';
+          if (task.priority || task.project) {
+            if (task.priority) {
+              const badge = document.createElement('span');
+              badge.className = 'backlog-badge';
+              badge.textContent = task.priority;
+              const color = PRIORITY_COLORS[task.priority];
+              if (color) { badge.style.borderColor = color; badge.style.color = color; }
+              tags.appendChild(badge);
+            }
+            if (task.project) {
+              const badge = document.createElement('span');
+              badge.className = 'backlog-badge';
+              badge.textContent = task.project;
+              const color = colorForProject(task.project);
+              badge.style.borderColor = color;
+              badge.style.color = color;
+              tags.appendChild(badge);
+            }
+            const editLink = document.createElement('span');
+            editLink.className = 'task-tags-edit';
+            editLink.textContent = 'edit';
+            editLink.onclick = () => startEditTags(task.id, textWrap);
+            tags.appendChild(editLink);
+          } else {
+            const addLink = document.createElement('span');
+            addLink.className = 'task-tags-add';
+            addLink.textContent = '+ tag priority/project';
+            addLink.onclick = () => startEditTags(task.id, textWrap);
+            tags.appendChild(addLink);
+          }
+          textWrap.appendChild(tags);
+        }
+
         li.appendChild(handle);
         li.appendChild(check);
         li.appendChild(textWrap);
@@ -1109,6 +1184,8 @@
           current.tasks.push({
             id: uid(), text, note: '', done: false, carryDays: 0, recurringId: null,
             notionPageId: created.id,
+            priority: priority || null,
+            project: project || null,
           });
           persist();
           renderToday();
@@ -1119,6 +1196,42 @@
       }
     }
     current.tasks.push({ id: uid(), text, note: '', done: false, carryDays: 0, recurringId: null });
+    persist();
+    renderToday();
+  }
+
+  async function setTaskTags(id, priority, project) {
+    const task = current.tasks.find(t => t.id === id);
+    if (!task) return;
+    task.priority = priority || null;
+    task.project = project || null;
+
+    if (notionWorkerUrl) {
+      if (task.notionPageId) {
+        await patchNotionTask(task.notionPageId, { priority: task.priority, project: task.project });
+      } else {
+        try {
+          const res = await fetch(notionApiUrl('/tasks'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: task.text,
+              priority: task.priority || undefined,
+              project: task.project || undefined,
+              status: task.done ? 'Done' : 'In progress',
+              assignedDate: current.date,
+            }),
+          });
+          if (res.ok) {
+            const created = await res.json();
+            task.notionPageId = created.id;
+          }
+        } catch (e) {
+          // offline or worker unreachable — tags stay local-only
+        }
+      }
+    }
+
     persist();
     renderToday();
   }
@@ -1187,6 +1300,57 @@
       task.note = input.value.trim();
       persist();
       renderToday();
+    });
+  }
+
+  function startEditTags(id, textWrap) {
+    const task = current.tasks.find(t => t.id === id);
+    if (!task) return;
+    const tagsEl = textWrap.querySelector('.task-tags');
+
+    const row = document.createElement('div');
+    row.className = 'task-tags-edit-row';
+
+    const prioritySelect = document.createElement('select');
+    prioritySelect.className = 'add-select';
+    const blankOpt = document.createElement('option');
+    blankOpt.value = '';
+    blankOpt.textContent = 'Priority';
+    prioritySelect.appendChild(blankOpt);
+    Array.from(addPrioritySelect.options).slice(1).forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.value;
+      if (task.priority === o.value) opt.selected = true;
+      prioritySelect.appendChild(opt);
+    });
+
+    const projectInput = document.createElement('input');
+    projectInput.className = 'add-select';
+    projectInput.setAttribute('list', 'addProjectOptions');
+    projectInput.placeholder = 'Project';
+    projectInput.autocomplete = 'off';
+    projectInput.value = task.project || '';
+
+    row.appendChild(prioritySelect);
+    row.appendChild(projectInput);
+    textWrap.replaceChild(row, tagsEl);
+
+    let cancelled = false;
+    let committed = false;
+    function commit() {
+      if (cancelled || committed) return;
+      committed = true;
+      setTaskTags(task.id, prioritySelect.value, projectInput.value.trim());
+    }
+
+    row.addEventListener('focusout', (e) => {
+      if (row.contains(e.relatedTarget)) return;
+      commit();
+    });
+    projectInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') { cancelled = true; renderToday(); }
     });
   }
 
@@ -1705,6 +1869,8 @@
       carryDays: 0,
       recurringId: null,
       notionPageId: item.id,
+      priority: item.priority || null,
+      project: item.project || null,
     });
     notionBacklog.splice(idx, 1);
     persist();
