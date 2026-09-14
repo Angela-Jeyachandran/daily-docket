@@ -476,6 +476,90 @@
     font-weight: 500;
   }
 
+  /* Notion backlog */
+  #notionBacklogSection {
+    margin-top: 22px;
+  }
+
+  .backlog-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hairline);
+    cursor: grab;
+  }
+
+  .backlog-item:last-child {
+    border-bottom: none;
+  }
+
+  .backlog-item.dragging {
+    opacity: 0.4;
+  }
+
+  .backlog-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .backlog-text {
+    font-size: 14.5px;
+    color: var(--ink);
+    word-break: break-word;
+  }
+
+  .backlog-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .backlog-badge {
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    border: 1px solid var(--hairline);
+    border-radius: 20px;
+    padding: 1px 7px;
+    white-space: nowrap;
+  }
+
+  .backlog-date {
+    font-size: 11px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-bottom: 1px dotted var(--ink-soft);
+  }
+
+  .backlog-date:hover {
+    color: var(--ink);
+  }
+
+  .backlog-date-input {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 2px 4px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  #notionBacklogSection.dragover #notionBacklogWrap {
+    outline: 1px dashed var(--ochre);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+
+  .notion-icon {
+    color: var(--ochre);
+    opacity: 0.7;
+    font-size: 11px;
+    margin-right: 4px;
+  }
+
   /* History view */
   .history-day {
     margin-bottom: 22px;
@@ -526,6 +610,11 @@
     <div class="add-row">
       <input class="add-input" id="addInput" placeholder="Add a task&hellip;">
       <button class="add-btn" id="addBtn">+</button>
+    </div>
+
+    <div id="notionBacklogSection" style="display: none;">
+      <div class="section-title">From Notion</div>
+      <div id="notionBacklogWrap"></div>
     </div>
   </div>
 
@@ -587,6 +676,19 @@
         <button class="save-btn" id="ghDisconnectBtn" style="background: var(--ink-soft);">Disconnect</button>
       </div>
       <div class="recurring-range" id="ghStatus"></div>
+    </div>
+
+    <div class="section-title">Notion</div>
+    <div class="recurring-form">
+      <div class="field-row">
+        <label for="notionUrlInput">Worker URL</label>
+        <input type="text" id="notionUrlInput" placeholder="https://your-worker.workers.dev">
+      </div>
+      <div class="field-row">
+        <button class="save-btn" id="notionConnectBtn">Connect</button>
+        <button class="save-btn" id="notionDisconnectBtn" style="background: var(--ink-soft);">Disconnect</button>
+      </div>
+      <div class="recurring-range" id="notionStatus"></div>
     </div>
   </div>
 
@@ -788,7 +890,8 @@
           note: t.note || '',
           done: false,
           carryDays: (t.carryDays || 0) + 1,
-          recurringId: t.recurringId || null
+          recurringId: t.recurringId || null,
+          notionPageId: t.notionPageId || null
         }));
 
       current = { date: today, tasks: carried };
@@ -833,6 +936,13 @@
 
     const wrap = document.getElementById('listWrap');
     wrap.innerHTML = '';
+    wrap.addEventListener('dragover', (e) => e.preventDefault());
+    wrap.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (dragSrcFrom === 'backlog' && dragSrcId) promoteNotionTask(dragSrcId);
+      dragSrcId = null;
+      dragSrcFrom = null;
+    });
 
     if (current.tasks.length === 0) {
       const empty = document.createElement('div');
@@ -849,14 +959,20 @@
 
         li.addEventListener('dragstart', () => {
           dragSrcId = task.id;
+          dragSrcFrom = 'today';
           li.classList.add('dragging');
         });
         li.addEventListener('dragend', () => li.classList.remove('dragging'));
         li.addEventListener('dragover', (e) => e.preventDefault());
         li.addEventListener('drop', (e) => {
           e.preventDefault();
-          if (dragSrcId && dragSrcId !== task.id) reorderTasks(dragSrcId, task.id);
+          if (dragSrcFrom === 'today' && dragSrcId && dragSrcId !== task.id) {
+            reorderTasks(dragSrcId, task.id);
+          } else if (dragSrcFrom === 'backlog' && dragSrcId) {
+            promoteNotionTask(dragSrcId);
+          }
           dragSrcId = null;
+          dragSrcFrom = null;
         });
 
         const handle = document.createElement('span');
@@ -878,6 +994,13 @@
           icon.className = 'repeat-icon';
           icon.title = 'Recurring task';
           icon.textContent = '↻';
+          text.appendChild(icon);
+        }
+        if (task.notionPageId) {
+          const icon = document.createElement('span');
+          icon.className = 'notion-icon';
+          icon.title = 'From Notion';
+          icon.textContent = '◆';
           text.appendChild(icon);
         }
         text.appendChild(document.createTextNode(task.text));
@@ -927,6 +1050,7 @@
   }
 
   let dragSrcId = null;
+  let dragSrcFrom = null; // 'today' | 'backlog'
 
   function reorderTasks(srcId, targetId) {
     const srcIndex = current.tasks.findIndex(t => t.id === srcId);
@@ -994,7 +1118,12 @@
 
   function toggleTask(id) {
     const task = current.tasks.find(t => t.id === id);
-    if (task) task.done = !task.done;
+    if (task) {
+      task.done = !task.done;
+      if (task.notionPageId) {
+        patchNotionTask(task.notionPageId, { status: task.done ? 'Done' : 'In progress' });
+      }
+    }
     persist();
     renderToday();
   }
@@ -1321,9 +1450,231 @@
 
   document.getElementById('historySearch').addEventListener('input', renderHistory);
 
+  // Notion sync: open tasks from a Notion database, proxied through a small
+  // Cloudflare Worker (Notion's API has no CORS headers, so the browser can't
+  // call it directly). The Notion integration token lives only as a Worker
+  // secret — the browser only ever holds the Worker's own URL.
+  const KEY_NOTION_URL = 'docket:notion-worker-url';
+  let notionWorkerUrl = localStorage.getItem(KEY_NOTION_URL) || '';
+  let notionBacklog = [];
+
+  function notionApiUrl(path) {
+    return notionWorkerUrl.replace(/\/$/, '') + path;
+  }
+
+  async function fetchNotionBacklog() {
+    if (!notionWorkerUrl) return;
+    try {
+      const res = await fetch(notionApiUrl('/tasks'));
+      if (!res.ok) throw new Error('status ' + res.status);
+      notionBacklog = await res.json();
+      notionStatus.textContent = `Connected — syncing with ${notionWorkerUrl}`;
+    } catch (e) {
+      notionStatus.textContent = `Connected — could not reach worker (${e.message})`;
+    }
+    renderBacklog();
+  }
+
+  async function patchNotionTask(pageId, updates) {
+    if (!notionWorkerUrl) return;
+    try {
+      await fetch(notionApiUrl('/tasks/' + pageId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+    } catch (e) {
+      // offline or worker unreachable — local state stands
+    }
+  }
+
+  function renderBacklog() {
+    const section = document.getElementById('notionBacklogSection');
+    const wrap = document.getElementById('notionBacklogWrap');
+    wrap.innerHTML = '';
+
+    if (!notionWorkerUrl) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+
+    if (notionBacklog.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Notion backlog is empty';
+      wrap.appendChild(empty);
+      return;
+    }
+
+    notionBacklog.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'backlog-item';
+      row.draggable = true;
+
+      row.addEventListener('dragstart', () => {
+        dragSrcId = item.id;
+        dragSrcFrom = 'backlog';
+        row.classList.add('dragging');
+      });
+      row.addEventListener('dragend', () => row.classList.remove('dragging'));
+
+      const info = document.createElement('div');
+      info.className = 'backlog-info';
+
+      const text = document.createElement('div');
+      text.className = 'backlog-text';
+      text.textContent = item.text;
+      info.appendChild(text);
+
+      const meta = document.createElement('div');
+      meta.className = 'backlog-meta';
+
+      if (item.priority) {
+        const badge = document.createElement('span');
+        badge.className = 'backlog-badge';
+        badge.textContent = item.priority;
+        meta.appendChild(badge);
+      }
+      if (item.project) {
+        const badge = document.createElement('span');
+        badge.className = 'backlog-badge';
+        badge.textContent = item.project;
+        meta.appendChild(badge);
+      }
+
+      const dateEl = document.createElement('span');
+      dateEl.className = 'backlog-date';
+      dateEl.textContent = item.assignedDate ? formatDateShort(item.assignedDate) : 'No date';
+      dateEl.title = 'Click to change date';
+      dateEl.onclick = () => startEditBacklogDate(item, meta, dateEl);
+      meta.appendChild(dateEl);
+
+      info.appendChild(meta);
+      row.appendChild(info);
+      wrap.appendChild(row);
+    });
+  }
+
+  function startEditBacklogDate(item, meta, dateEl) {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.className = 'backlog-date-input';
+    input.value = item.assignedDate || '';
+    meta.replaceChild(input, dateEl);
+    input.focus();
+
+    let cancelled = false;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      else if (e.key === 'Escape') { cancelled = true; renderBacklog(); }
+    });
+    input.addEventListener('blur', async () => {
+      if (cancelled) return;
+      const val = input.value;
+      if (val && val !== item.assignedDate) {
+        item.assignedDate = val;
+        await patchNotionTask(item.id, { assignedDate: val });
+      }
+      renderBacklog();
+    });
+  }
+
+  async function promoteNotionTask(pageId) {
+    const idx = notionBacklog.findIndex(b => b.id === pageId);
+    if (idx === -1) return;
+    const item = notionBacklog[idx];
+
+    current.tasks.push({
+      id: uid(),
+      text: item.text,
+      note: '',
+      done: false,
+      carryDays: 0,
+      recurringId: null,
+      notionPageId: item.id,
+    });
+    notionBacklog.splice(idx, 1);
+    persist();
+    renderToday();
+    renderBacklog();
+
+    await patchNotionTask(item.id, { assignedDate: current.date, status: 'In progress' });
+  }
+
+  function sendTaskToBacklog(taskId) {
+    const idx = current.tasks.findIndex(t => t.id === taskId);
+    if (idx === -1) return;
+    const task = current.tasks[idx];
+    if (!task.notionPageId) return;
+    current.tasks.splice(idx, 1);
+    persist();
+    renderToday();
+    fetchNotionBacklog();
+  }
+
+  const notionUrlInput = document.getElementById('notionUrlInput');
+  const notionStatus = document.getElementById('notionStatus');
+
+  function setNotionWorkerUrl(url) {
+    notionWorkerUrl = url;
+    if (notionWorkerUrl) {
+      localStorage.setItem(KEY_NOTION_URL, notionWorkerUrl);
+    } else {
+      localStorage.removeItem(KEY_NOTION_URL);
+    }
+  }
+
+  function refreshNotionStatus() {
+    notionStatus.textContent = notionWorkerUrl
+      ? `Connected — syncing with ${notionWorkerUrl}`
+      : 'Not connected — no Notion backlog shown.';
+  }
+  refreshNotionStatus();
+
+  async function initNotionSync() {
+    refreshNotionStatus();
+    if (notionWorkerUrl) {
+      await fetchNotionBacklog();
+    } else {
+      renderBacklog();
+    }
+  }
+
+  document.getElementById('notionConnectBtn').addEventListener('click', () => {
+    const url = notionUrlInput.value.trim();
+    if (!url) return;
+    setNotionWorkerUrl(url);
+    notionUrlInput.value = '';
+    initNotionSync();
+  });
+
+  document.getElementById('notionDisconnectBtn').addEventListener('click', () => {
+    setNotionWorkerUrl('');
+    notionBacklog = [];
+    refreshNotionStatus();
+    renderBacklog();
+  });
+
+  const notionSection = document.getElementById('notionBacklogSection');
+  notionSection.addEventListener('dragover', (e) => {
+    if (dragSrcFrom !== 'today') return;
+    e.preventDefault();
+    notionSection.classList.add('dragover');
+  });
+  notionSection.addEventListener('dragleave', () => notionSection.classList.remove('dragover'));
+  notionSection.addEventListener('drop', (e) => {
+    e.preventDefault();
+    notionSection.classList.remove('dragover');
+    if (dragSrcFrom === 'today' && dragSrcId) sendTaskToBacklog(dragSrcId);
+    dragSrcId = null;
+    dragSrcFrom = null;
+  });
+
   rolloverIfNeeded();
   renderToday();
   initGhSync();
+  initNotionSync();
 </script>
 
 </body>

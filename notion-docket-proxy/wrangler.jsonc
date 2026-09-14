@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "notion-docket-proxy",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-14",
+  "vars": {
+    "NOTION_DATABASE_ID": "398ae20b-aecf-80af-83f9-df7c6e81b5b6",
+    "ALLOWED_ORIGIN": "https://angela-jeyachandran.github.io"
+  }
+}
