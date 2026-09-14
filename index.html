@@ -560,6 +560,12 @@
     margin-top: 22px;
   }
 
+  .backlog-filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
   .backlog-item {
     display: flex;
     align-items: center;
@@ -719,6 +725,14 @@
 
     <div id="notionBacklogSection" style="display: none;">
       <div class="section-title">From Notion</div>
+      <div class="backlog-filters" id="backlogFilters">
+        <select class="add-select" id="backlogPriorityFilter">
+          <option value="">All priorities</option>
+        </select>
+        <select class="add-select" id="backlogProjectFilter">
+          <option value="">All projects</option>
+        </select>
+      </div>
       <div id="notionBacklogWrap"></div>
     </div>
   </div>
@@ -1176,6 +1190,15 @@
           li.appendChild(badge);
         }
 
+        if (task.notionPageId) {
+          const demote = document.createElement('button');
+          demote.className = 'del';
+          demote.textContent = '−';
+          demote.title = 'Move back to From Notion';
+          demote.onclick = () => sendTaskToBacklog(task.id);
+          li.appendChild(demote);
+        }
+
         const del = document.createElement('button');
         del.className = 'del';
         del.textContent = '✕';
@@ -1204,7 +1227,7 @@
             priority: priority || undefined,
             project: project || undefined,
             status: 'In progress',
-            assignedDate: dueDate || current.date,
+            dueDate: dueDate || current.date,
           }),
         });
         if (res.ok) {
@@ -1241,7 +1264,7 @@
         await patchNotionTask(task.notionPageId, {
           priority: task.priority,
           project: task.project,
-          assignedDate: task.dueDate,
+          dueDate: task.dueDate,
         });
       } else {
         try {
@@ -1253,7 +1276,7 @@
               priority: task.priority || undefined,
               project: task.project || undefined,
               status: task.done ? 'Done' : 'In progress',
-              assignedDate: task.dueDate || current.date,
+              dueDate: task.dueDate || current.date,
             }),
           });
           if (res.ok) {
@@ -1767,7 +1790,13 @@
   async function fetchNotionBacklog() {
     if (!notionWorkerUrl) return;
     try {
-      const res = await fetch(notionApiUrl('/tasks'));
+      const params = new URLSearchParams();
+      const priorityFilter = document.getElementById('backlogPriorityFilter');
+      const projectFilter = document.getElementById('backlogProjectFilter');
+      if (priorityFilter && priorityFilter.value) params.set('priority', priorityFilter.value);
+      if (projectFilter && projectFilter.value) params.set('project', projectFilter.value);
+      const qs = params.toString();
+      const res = await fetch(notionApiUrl('/tasks' + (qs ? '?' + qs : '')));
       if (!res.ok) throw new Error('status ' + res.status);
       notionBacklog = await res.json();
       notionStatus.textContent = `Connected — syncing with ${notionWorkerUrl}`;
@@ -1864,10 +1893,10 @@
         meta.appendChild(badge);
       }
 
-      if (item.assignedDate) {
+      if (item.dueDate) {
         const dateEl = document.createElement('span');
         dateEl.className = 'backlog-date';
-        dateEl.textContent = formatDateShort(item.assignedDate);
+        dateEl.textContent = formatDateShort(item.dueDate);
         dateEl.title = 'Click to change date';
         dateEl.onclick = () => startEditBacklogDate(item, meta, dateEl);
         meta.appendChild(dateEl);
@@ -1894,7 +1923,7 @@
     const input = document.createElement('input');
     input.type = 'date';
     input.className = 'backlog-date-input';
-    input.value = item.assignedDate || '';
+    input.value = item.dueDate || '';
     meta.replaceChild(input, dateEl);
     input.focus();
 
@@ -1906,9 +1935,9 @@
     input.addEventListener('blur', async () => {
       if (cancelled) return;
       const val = input.value;
-      if (val && val !== item.assignedDate) {
-        item.assignedDate = val;
-        await patchNotionTask(item.id, { assignedDate: val });
+      if (val && val !== item.dueDate) {
+        item.dueDate = val;
+        await patchNotionTask(item.id, { dueDate: val });
       }
       renderBacklog();
     });
@@ -1935,7 +1964,7 @@
     renderToday();
     renderBacklog();
 
-    await patchNotionTask(item.id, { assignedDate: current.date, status: 'In progress' });
+    await patchNotionTask(item.id, { dueDate: current.date, status: 'In progress' });
   }
 
   function sendTaskToBacklog(taskId) {
@@ -1995,10 +2024,15 @@
       const meta = await res.json();
       populateSelectOptions(addPrioritySelect, meta.priorities || []);
       populateDatalistOptions(document.getElementById('addProjectOptions'), meta.projects || []);
+      populateSelectOptions(document.getElementById('backlogPriorityFilter'), meta.priorities || []);
+      populateSelectOptions(document.getElementById('backlogProjectFilter'), meta.projects || []);
     } catch (e) {
       // offline or worker unreachable — selects stay empty
     }
   }
+
+  document.getElementById('backlogPriorityFilter').addEventListener('change', fetchNotionBacklog);
+  document.getElementById('backlogProjectFilter').addEventListener('change', fetchNotionBacklog);
 
   function refreshAddTaskControls() {
     const show = !!notionWorkerUrl;

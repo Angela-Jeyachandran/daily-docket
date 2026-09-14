@@ -6,10 +6,12 @@
 // using a token that lives only as a Worker secret.
 //
 // Routes:
-//   GET  /tasks            -> open tasks from the database (Done/Paused excluded)
-//   POST /tasks            -> create a new task
-//   PATCH /tasks/:pageId    -> update Assigned Date and/or Status on one task
-//   GET  /meta              -> available Priority/Project select options
+//   GET  /tasks                   -> open tasks (Done/Paused excluded), optional
+//                                     ?project= and ?priority= filters
+//   POST /tasks                   -> create a new task
+//   PATCH /tasks/:pageId          -> update Due Date, Status, Priority, Project,
+//                                     Description, or archived on one task
+//   GET  /meta                    -> available Priority/Project select options
 
 const NOTION_VERSION = '2022-06-28';
 const NOTION_API = 'https://api.notion.com/v1';
@@ -46,23 +48,29 @@ function pageToTask(page) {
     status: (props.Status && props.Status.status && props.Status.status.name) || null,
     priority: (props.Priority && props.Priority.select && props.Priority.select.name) || null,
     project: (props.Project && props.Project.select && props.Project.select.name) || null,
-    assignedDate: (props['Assigned Date'] && props['Assigned Date'].date && props['Assigned Date'].date.start) || null,
+    dueDate: (props['Due Date'] && props['Due Date'].date && props['Due Date'].date.start) || null,
     description: plainText(props.Description && props.Description.rich_text),
   };
 }
 
-async function handleGetTasks(env) {
+async function handleGetTasks(url, env) {
+  const filter = {
+    and: [
+      { property: 'Status', status: { does_not_equal: 'Done' } },
+      { property: 'Status', status: { does_not_equal: 'Paused' } },
+    ],
+  };
+  const project = url.searchParams.get('project');
+  const priority = url.searchParams.get('priority');
+  if (project) filter.and.push({ property: 'Project', select: { equals: project } });
+  if (priority) filter.and.push({ property: 'Priority', select: { equals: priority } });
+
   const res = await fetch(`${NOTION_API}/databases/${env.NOTION_DATABASE_ID}/query`, {
     method: 'POST',
     headers: notionHeaders(env.NOTION_TOKEN),
     body: JSON.stringify({
-      filter: {
-        and: [
-          { property: 'Status', status: { does_not_equal: 'Done' } },
-          { property: 'Status', status: { does_not_equal: 'Paused' } },
-        ],
-      },
-      sorts: [{ property: 'Assigned Date', direction: 'ascending' }],
+      filter,
+      sorts: [{ property: 'Due Date', direction: 'ascending' }],
     }),
   });
 
@@ -113,7 +121,7 @@ async function handleCreateTask(body, env) {
   if (body.priority) properties['Priority'] = { select: { name: body.priority } };
   if (body.project) properties['Project'] = { select: { name: body.project } };
   if (body.status) properties['Status'] = { status: { name: body.status } };
-  if (body.assignedDate) properties['Assigned Date'] = { date: { start: body.assignedDate } };
+  if (body.dueDate) properties['Due Date'] = { date: { start: body.dueDate } };
   if (body.description) properties['Description'] = { rich_text: [{ text: { content: body.description } }] };
 
   const res = await fetch(`${NOTION_API}/pages`, {
@@ -140,9 +148,9 @@ async function handleCreateTask(body, env) {
 async function handlePatchTask(pageId, body, env) {
   const properties = {};
 
-  if (body.assignedDate !== undefined) {
-    properties['Assigned Date'] = body.assignedDate
-      ? { date: { start: body.assignedDate } }
+  if (body.dueDate !== undefined) {
+    properties['Due Date'] = body.dueDate
+      ? { date: { start: body.dueDate } }
       : { date: null };
   }
   if (body.status !== undefined) {
@@ -201,7 +209,7 @@ export default {
 
     try {
       if (request.method === 'GET' && url.pathname === '/tasks') {
-        response = await handleGetTasks(env);
+        response = await handleGetTasks(url, env);
       } else if (request.method === 'GET' && url.pathname === '/meta') {
         response = await handleGetMeta(env);
       } else if (request.method === 'POST' && url.pathname === '/tasks') {
