@@ -376,6 +376,29 @@
     max-width: 92px;
   }
 
+  .add-details-toggle {
+    background: none;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 0 2px;
+    opacity: 0.75;
+    white-space: nowrap;
+    transition: opacity 0.15s ease;
+  }
+
+  .add-details-toggle:hover {
+    opacity: 1;
+  }
+
+  .add-details-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
   .add-btn:hover {
     opacity: 1;
   }
@@ -624,12 +647,16 @@
 
     <div class="add-row">
       <input class="add-input" id="addInput" placeholder="Add a task&hellip;">
-      <select class="add-select" id="addPrioritySelect" style="display: none;">
+      <button class="add-details-toggle" id="addDetailsToggle" style="display: none;">+ details</button>
+      <button class="add-btn" id="addBtn">+</button>
+    </div>
+
+    <div class="add-details-row" id="addDetailsRow" style="display: none;">
+      <select class="add-select" id="addPrioritySelect">
         <option value="">Priority</option>
       </select>
-      <input class="add-select" id="addProjectSelect" list="addProjectOptions" placeholder="Project" style="display: none;" autocomplete="off">
+      <input class="add-select" id="addProjectSelect" list="addProjectOptions" placeholder="Project" autocomplete="off">
       <datalist id="addProjectOptions"></datalist>
-      <button class="add-btn" id="addBtn">+</button>
     </div>
 
     <div id="notionBacklogSection" style="display: none;">
@@ -1420,6 +1447,19 @@
   const input = document.getElementById('addInput');
   const addPrioritySelect = document.getElementById('addPrioritySelect');
   const addProjectSelect = document.getElementById('addProjectSelect');
+  const addDetailsToggle = document.getElementById('addDetailsToggle');
+  const addDetailsRow = document.getElementById('addDetailsRow');
+
+  function collapseAddDetails() {
+    addDetailsRow.style.display = 'none';
+    addDetailsToggle.textContent = '+ details';
+  }
+
+  addDetailsToggle.addEventListener('click', () => {
+    const open = addDetailsRow.style.display !== 'none';
+    addDetailsRow.style.display = open ? 'none' : 'flex';
+    addDetailsToggle.textContent = open ? '+ details' : '− details';
+  });
 
   function submitAddTask() {
     if (!input.value.trim()) return;
@@ -1427,6 +1467,7 @@
     input.value = '';
     addPrioritySelect.value = '';
     addProjectSelect.value = '';
+    collapseAddDetails();
   }
 
   input.addEventListener('keydown', (e) => {
@@ -1737,8 +1778,8 @@
 
   function refreshAddTaskControls() {
     const show = !!notionWorkerUrl;
-    addPrioritySelect.style.display = show ? '' : 'none';
-    addProjectSelect.style.display = show ? '' : 'none';
+    addDetailsToggle.style.display = show ? '' : 'none';
+    if (!show) collapseAddDetails();
   }
 
   async function initNotionSync() {
