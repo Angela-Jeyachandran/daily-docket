@@ -1,34 +1,42 @@
 {
   "current": {
-    "date": "2026-09-14",
+    "date": "2026-10-12",
     "tasks": [
       {
-        "id": "vvneupry",
-        "text": "Plan itinerary for next meeting",
-        "note": "Next eNews meeting",
-        "done": false,
-        "carryDays": 1,
-        "recurringId": null
-      },
-      {
-        "id": "243fy0w5",
+        "id": "7pdkn4mn",
         "text": "Check CB submissions",
         "note": "",
-        "done": false,
-        "carryDays": 0,
-        "recurringId": null
-      },
-      {
-        "id": "5u420h7i",
-        "text": "Create a Prompt for Regan to Run in Claude",
-        "note": "For the CB follow up process",
-        "done": false,
-        "carryDays": 0,
-        "recurringId": null
+        "done": true,
+        "carryDays": 1,
+        "recurringId": null,
+        "notionPageId": null,
+        "priority": null,
+        "project": null,
+        "dueDate": null
       }
     ]
   },
   "history": [
+    {
+      "date": "2026-09-14",
+      "tasks": [
+        {
+          "text": "Plan itinerary for next meeting",
+          "done": false,
+          "note": "Next eNews meeting"
+        },
+        {
+          "text": "Check CB submissions",
+          "done": false,
+          "note": ""
+        },
+        {
+          "text": "Create a Prompt for Regan to Run in Claude",
+          "done": false,
+          "note": "For the CB follow up process"
+        }
+      ]
+    },
     {
       "date": "2026-09-11",
       "tasks": [
@@ -51,11 +59,5 @@
     }
   ],
   "recurring": [],
-  "scheduled": [
-    {
-      "id": "o586ghr0",
-      "text": "Request PTO",
-      "date": "2026-09-21"
-    }
-  ]
+  "scheduled": []
 }
