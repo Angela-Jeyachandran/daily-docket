@@ -1,22 +1,19 @@
 {
   "current": {
-    "date": "2026-10-12",
-    "tasks": [
-      {
-        "id": "7pdkn4mn",
-        "text": "Check CB submissions",
-        "note": "",
-        "done": true,
-        "carryDays": 1,
-        "recurringId": null,
-        "notionPageId": null,
-        "priority": null,
-        "project": null,
-        "dueDate": null
-      }
-    ]
+    "date": "2026-10-13",
+    "tasks": []
   },
   "history": [
+    {
+      "date": "2026-10-12",
+      "tasks": [
+        {
+          "text": "Check CB submissions",
+          "done": true,
+          "note": ""
+        }
+      ]
+    },
     {
       "date": "2026-09-14",
       "tasks": [
